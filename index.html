@@ -1,15 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>Hello World PWA</title>
 
   <!-- PWA Meta -->
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#111111">
-
-  <link rel="manifest" href="manifest.json">
-  <link rel="apple-touch-icon" href="icon-192.png">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#111111" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="icon-192.png" />
 
   <style>
     body {
@@ -18,56 +17,264 @@
       color: white;
       font-family: Arial, sans-serif;
       display: flex;
-      height: 100vh;
+      min-height: 100vh;
       justify-content: center;
       align-items: center;
       flex-direction: column;
       text-align: center;
+      padding: 24px;
     }
+    h1 { font-size: 3rem; margin: 0 0 8px; }
+    p { opacity: 0.75; margin: 8px 0; }
 
-    h1 {
-      font-size: 3rem;
-    }
-
-    p {
-      opacity: 0.7;
+    .row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-top: 16px;
     }
 
     button {
-      padding: 10px 20px;
-      margin-top: 20px;
+      padding: 10px 16px;
       font-size: 16px;
       border: none;
-      border-radius: 6px;
+      border-radius: 10px;
       background: #00c3ff;
+      color: #000;
+      font-weight: 700;
       cursor: pointer;
+    }
+    button.secondary {
+      background: #2a2a2a;
+      color: #fff;
+      font-weight: 600;
+    }
+    button[disabled] {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .pill {
+      display: inline-block;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: #1f1f1f;
+      margin-top: 10px;
+      font-size: 13px;
+      opacity: 0.9;
+    }
+
+    /* Simple modal */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      z-index: 9999;
+    }
+    .modal {
+      width: min(520px, 100%);
+      background: #1b1b1b;
+      border-radius: 14px;
+      padding: 18px;
+      text-align: left;
+      box-shadow: 0 0 30px rgba(0,0,0,0.6);
+    }
+    .modal h2 {
+      margin: 0 0 10px;
+      font-size: 20px;
+    }
+    .modal ol {
+      margin: 8px 0 0 18px;
+      opacity: 0.9;
+      line-height: 1.5;
+    }
+    .modal .actions {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      margin-top: 16px;
     }
   </style>
 </head>
-<body>
 
+<body>
   <h1>Hello World 👋</h1>
   <p>This is your Progressive Web App.</p>
 
-  <button onclick="showMessage()">Click Me</button>
-  
-  <p id="installHint" style="margin-top:20px; opacity:0.7;">
-    On iPhone: Tap Share → Add to Home Screen 📲
+  <div id="platformPill" class="pill">Detecting device…</div>
+
+  <div class="row">
+    <button id="installBtn" onclick="handleInstallClick()" disabled>Install</button>
+    <button class="secondary" onclick="showMessage()">Test Button</button>
+  </div>
+
+  <p id="installStatus" style="margin-top:14px; max-width: 600px;">
+    Tip: Scan the QR code to open this page, then install.
   </p>
+
+  <!-- iOS install instructions modal -->
+  <div id="modalBackdrop" class="modal-backdrop" role="dialog" aria-modal="true">
+    <div class="modal">
+      <h2>Install on iPhone / iPad</h2>
+      <p style="opacity:0.85; margin:0 0 6px;">
+        iOS doesn’t allow automatic installation for PWAs. Use these steps:
+      </p>
+      <ol>
+        <li>Open this page in <b>Safari</b> (not inside another app’s browser).</li>
+        <li>Tap the <b>Share</b> button (square with arrow).</li>
+        <li>Tap <b>Add to Home Screen</b>.</li>
+        <li>Open the app from your home screen.</li>
+      </ol>
+      <div class="actions">
+        <button class="secondary" onclick="closeModal()">Close</button>
+      </div>
+    </div>
+  </div>
 
   <script>
     function showMessage() {
       alert("Your PWA is working 🚀");
     }
 
-    // Register Service Worker
+    // --- Service worker ---
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => {
         navigator.serviceWorker.register("./service-worker.js")
-          .then(() => console.log("Service Worker Registered"));
+          .then(() => console.log("Service Worker Registered"))
+          .catch((e) => console.warn("Service Worker failed:", e));
       });
     }
-  </script>
 
+    // --- Platform detection ---
+    const ua = navigator.userAgent || "";
+    const isAndroid = /Android/i.test(ua);
+    const isIOS = /iPhone|iPad|iPod/i.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+    // PWA "standalone" detection:
+    // - iOS Safari: navigator.standalone
+    // - Others: display-mode media query
+    const isStandalone = () =>
+      window.matchMedia?.("(display-mode: standalone)")?.matches ||
+      window.matchMedia?.("(display-mode: fullscreen)")?.matches ||
+      window.navigator.standalone === true;
+
+    const platformPill = document.getElementById("platformPill");
+    const installBtn = document.getElementById("installBtn");
+    const installStatus = document.getElementById("installStatus");
+
+    function updatePlatformUI() {
+      if (isStandalone()) {
+        platformPill.textContent = "✅ Installed (standalone mode)";
+        installBtn.style.display = "none";
+        installStatus.textContent = "This app is already installed.";
+        return;
+      }
+
+      if (isAndroid) {
+        platformPill.textContent = "🤖 Android detected";
+      } else if (isIOS) {
+        platformPill.textContent = " iPhone/iPad detected";
+      } else {
+        platformPill.textContent = "💻 Desktop / Other device detected";
+      }
+    }
+
+    // --- Smart install prompt (Android/Chromium only) ---
+    let deferredPrompt = null;
+
+    window.addEventListener("beforeinstallprompt", (event) => {
+      // This fires on supported browsers (mostly Android Chrome/Edge)
+      event.preventDefault();
+      deferredPrompt = event;
+
+      if (!isStandalone()) {
+        installBtn.disabled = false;
+        installBtn.textContent = "Install App";
+        installStatus.textContent = "Tap “Install App” to add this to your home screen.";
+      }
+    });
+
+    window.addEventListener("appinstalled", () => {
+      deferredPrompt = null;
+      updatePlatformUI();
+    });
+
+    function openModal() {
+      document.getElementById("modalBackdrop").style.display = "flex";
+    }
+    function closeModal() {
+      document.getElementById("modalBackdrop").style.display = "none";
+    }
+
+    async function handleInstallClick() {
+      // Already installed?
+      if (isStandalone()) {
+        updatePlatformUI();
+        return;
+      }
+
+      // iOS: show instructions (no programmatic prompt)
+      if (isIOS) {
+        openModal();
+        return;
+      }
+
+      // Android supported browser: show install prompt if available
+      if (deferredPrompt) {
+        installBtn.disabled = true;
+        try {
+          deferredPrompt.prompt();
+          const choice = await deferredPrompt.userChoice;
+          // choice.outcome: "accepted" or "dismissed"
+          if (choice.outcome === "accepted") {
+            installStatus.textContent = "Installing… check your home screen.";
+          } else {
+            installStatus.textContent = "Install dismissed. You can try again anytime.";
+          }
+        } catch (e) {
+          installStatus.textContent = "Install failed to open. Try using Chrome on Android.";
+        } finally {
+          deferredPrompt = null;
+          installBtn.disabled = false;
+        }
+        return;
+      }
+
+      // Fallbacks when prompt isn't available
+      if (isAndroid) {
+        installStatus.textContent = "If you don’t see an install prompt, open browser menu → “Install app” / “Add to Home screen”.";
+      } else {
+        installStatus.textContent = "Install not supported here. Try on iPhone (Safari) or Android (Chrome).";
+      }
+    }
+
+    // Initial UI state
+    updatePlatformUI();
+
+    // If no beforeinstallprompt arrives, show helpful hint
+    // (e.g., Android Firefox, desktop Safari, etc.)
+    setTimeout(() => {
+      if (isStandalone()) return;
+
+      if (isIOS) {
+        installBtn.disabled = false;
+        installBtn.textContent = "How to Install";
+        installStatus.textContent = "Tap “How to Install” for iPhone/iPad steps (Safari → Share → Add to Home Screen).";
+      } else if (isAndroid && !deferredPrompt) {
+        installBtn.disabled = false;
+        installBtn.textContent = "Install (Help)";
+        installStatus.textContent = "If the install prompt doesn’t appear, use browser menu → “Install app” / “Add to Home screen”.";
+      } else if (!isAndroid && !isIOS) {
+        installBtn.disabled = false;
+        installBtn.textContent = "Install (Info)";
+        installStatus.textContent = "Install support varies by browser. Best: Android Chrome or iPhone Safari.";
+      }
+    }, 800);
+  </script>
 </body>
 </html>
